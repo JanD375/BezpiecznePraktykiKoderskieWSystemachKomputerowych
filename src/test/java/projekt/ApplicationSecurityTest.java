@@ -39,8 +39,11 @@ public class ApplicationSecurityTest {
     public void testUserPasswordIsNotStoredInPlainText() throws Exception {
         CredentialProvider stubProvider = new RuntimeCredentialProvider(new String[]{"", ""});
         UserRepository repo = new UserRepository("jdbc:h2:mem:test1;DB_CLOSE_DELAY=-1", stubProvider);
-
-        repo.registerUser("alice", "haslo123");
+        String masterpassward;
+        masterpassward = "szyfrowanie";
+        String encryptedUsername = CryptoUtils.encrypt("alice", masterpassward);
+        String encryptedPassword = CryptoUtils.encrypt("haslo123", masterpassward);
+        repo.registerUser(encryptedUsername, encryptedPassword);
 
         try (Connection conn = repo.getConnection();
              PreparedStatement pstmt = conn.prepareStatement("SELECT * FROM app_users WHERE username = 'alice'");
@@ -57,9 +60,12 @@ public class ApplicationSecurityTest {
     public void testUserSavedSuccessfullyWithValidHashing() throws Exception {
         CredentialProvider stubProvider = new RuntimeCredentialProvider(new String[]{"", ""});
         UserRepository repo = new UserRepository("jdbc:h2:mem:test2;DB_CLOSE_DELAY=-1", stubProvider);
-
+        String masterpassward;
+        masterpassward = "szyfrowanie";
         String plainPassword = "obo321";
-        repo.registerUser("bob", plainPassword);
+        String encryptedUsername = CryptoUtils.encrypt("bob", masterpassward);
+        String encryptedPassword = CryptoUtils.encrypt(plainPassword, masterpassward);
+        repo.registerUser(encryptedUsername, encryptedPassword);
 
         try (Connection conn = repo.getConnection();
              PreparedStatement pstmt = conn.prepareStatement("SELECT * FROM app_users WHERE username = 'bob'");

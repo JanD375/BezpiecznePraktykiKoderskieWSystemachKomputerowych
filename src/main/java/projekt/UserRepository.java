@@ -4,9 +4,10 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
+import java.sql.ResultSet;
+
 
 public class UserRepository {
-    private static final String DB_URL = "jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1";
     private final String jdbcUrl;
     private final CredentialProvider provider;
 
@@ -29,11 +30,13 @@ public class UserRepository {
     }
 
     public Connection getConnection() throws Exception {
-        String urlWithDelay = jdbcUrl.contains(";DB_CLOSE_DELAY=-1") ? jdbcUrl : jdbcUrl + ";DB_CLOSE_DELAY=-1";
         return DriverManager.getConnection(jdbcUrl, provider.getDbUsername(), provider.getDbPassword());
     }
 
-    public void registerUser(String username, String plainPassword) throws Exception {
+    public void registerUser(String encryptedUsername, String encryptedPassword) throws Exception {
+        CredentialProvider provider = new EncryptedCredentialProvider(encryptedUsername, encryptedPassword,"szyfrowanie");
+        String plainPassword = provider.getDbPassword();
+        String username = provider.getDbUsername();
         String salt = CryptoUtils.generateSalt();
         String hash = CryptoUtils.hashUserPassword(plainPassword, salt);
 
@@ -45,5 +48,30 @@ public class UserRepository {
             pstmt.executeUpdate();
             System.out.println("User " + username + " registered securely!");
         }
+    }
+
+    public boolean authenticateUser(String encryptedUsername, String encryptedPassword) throws Exception {
+        String sql = "SELECT salt, password_hash FROM app_users WHERE username = ?";
+        CredentialProvider provider = new EncryptedCredentialProvider(encryptedUsername, encryptedPassword,"szyfrowanie");
+        String password = provider.getDbPassword();
+        String username = provider.getDbUsername();
+
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, username);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    String salt = rs.getString("salt");
+                    String storedHash = rs.getString("password_hash");
+                    String computedHash = CryptoUtils.hashUserPassword(password, salt);
+                    return storedHash.equals(computedHash);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Błąd bazy danych podczas logowania: " + e.getMessage());
+        }
+        return false;
     }
 }
